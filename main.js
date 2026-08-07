@@ -22,7 +22,7 @@ renderer.setPixelRatio(window.devicePixelRatio);
 container.appendChild(renderer.domElement);
 
 // ==========================================
-// 2. LE GLOBE (Utilisation du nouveau module)
+// 2. LE GLOBE
 // ==========================================
 const globe = new Globe(scene);
 
@@ -44,12 +44,17 @@ controls.minDistance = 8;
 controls.maxDistance = 20;
 
 let autoRotateTimeout;
+const autoRotateCheckbox = document.getElementById('toggle-autorotate');
+
 controls.addEventListener('start', () => {
     controls.autoRotate = false;
     clearTimeout(autoRotateTimeout);
 });
 controls.addEventListener('end', () => {
-    autoRotateTimeout = setTimeout(() => { controls.autoRotate = true; }, 3000);
+    // Ne reprend l'auto-rotation que si l'interrupteur est coché
+    if (autoRotateCheckbox.checked) {
+        autoRotateTimeout = setTimeout(() => { controls.autoRotate = true; }, 3000);
+    }
 });
 
 // ==========================================
@@ -168,14 +173,44 @@ themeButtons.forEach(btn => {
         btn.classList.add('active');
         const theme = btn.getAttribute('data-theme');
         globe.setTheme(theme);
-        showHUD(); // Pour repousser le timer du HUD
+        showHUD();
     });
+});
+
+// NOUVEAU : Gestion du panneau de paramètres
+const earthquakeViz = new EarthquakeVisualizer(scene);
+const disasterViz = new DisasterVisualizer(scene);
+const airTrafficViz = new AirTrafficVisualizer(scene);
+
+document.getElementById('toggle-earthquakes').addEventListener('change', (e) => {
+    earthquakeViz.group.visible = e.target.checked;
+    showHUD();
+});
+
+document.getElementById('toggle-disasters').addEventListener('change', (e) => {
+    disasterViz.group.visible = e.target.checked;
+    showHUD();
+});
+
+document.getElementById('toggle-airtraffic').addEventListener('change', (e) => {
+    airTrafficViz.group.visible = e.target.checked;
+    showHUD();
+});
+
+autoRotateCheckbox.addEventListener('change', (e) => {
+    controls.autoRotate = e.target.checked;
+    if (!e.target.checked) clearTimeout(autoRotateTimeout);
+    showHUD();
+});
+
+document.getElementById('rotation-speed').addEventListener('input', (e) => {
+    controls.autoRotateSpeed = parseFloat(e.target.value);
+    showHUD();
 });
 
 // ==========================================
 // 6. INTÉGRATION DES DONNÉES
 // ==========================================
-const earthquakeViz = new EarthquakeVisualizer(scene);
 let knownEarthquakeIds = new Set();
 
 async function updateEarthquakes() {
@@ -185,7 +220,6 @@ async function updateEarthquakes() {
             knownEarthquakeIds.add(eq.id);
             const isRecent = true;
             if (isRecent) {
-                // NOUVEAU : on passe eq.place et eq.time
                 earthquakeViz.addEarthquake(eq.lat, eq.lon, eq.mag, eq.id, eq.place, eq.time);
                 playEarthquakeSound(eq.mag);
             }
@@ -195,7 +229,6 @@ async function updateEarthquakes() {
 updateEarthquakes();
 setInterval(updateEarthquakes, 300000);
 
-const disasterViz = new DisasterVisualizer(scene);
 let previousDisasterIds = new Set();
 
 async function updateDisasters() {
@@ -204,7 +237,6 @@ async function updateDisasters() {
     disasters.forEach(d => {
         currentDisasterIds.add(d.id);
         if (!previousDisasterIds.has(d.id)) {
-            // NOUVEAU : on passe d.date et d.source
             disasterViz.addDisaster(d.lat, d.lon, d.alert, d.id, d.name, d.type, d.date, d.source);
             playDisasterSound(d.alert);
         }
@@ -217,7 +249,6 @@ async function updateDisasters() {
 updateDisasters();
 setInterval(updateDisasters, 900000);
 
-const airTrafficViz = new AirTrafficVisualizer(scene);
 async function updateAirTraffic() {
     const flights = await fetchAirTraffic();
     if (flights.length > 0) airTrafficViz.updateFlights(flights);
@@ -244,16 +275,25 @@ window.addEventListener('mousemove', onMouseMove, false);
 function checkIntersections() {
     raycaster.setFromCamera(mouse, camera);
     const intersects = [];
-    const eqMeshes = earthquakeViz.staticPoints.map(p => p.mesh);
-    const eqHits = raycaster.intersectObjects(eqMeshes);
-    eqHits.forEach(h => intersects.push({ ...h, category: 'eq' }));
-    const disMeshes = Array.from(disasterViz.activeDisasters.values()).map(d => d.mesh);
-    const disHits = raycaster.intersectObjects(disMeshes);
-    disHits.forEach(h => intersects.push({ ...h, category: 'dis' }));
-    if (airTrafficViz.pointsMesh) {
+    
+    // On ne raycast que les groupes visibles
+    if (earthquakeViz.group.visible) {
+        const eqMeshes = earthquakeViz.staticPoints.map(p => p.mesh);
+        const eqHits = raycaster.intersectObjects(eqMeshes);
+        eqHits.forEach(h => intersects.push({ ...h, category: 'eq' }));
+    }
+    
+    if (disasterViz.group.visible) {
+        const disMeshes = Array.from(disasterViz.activeDisasters.values()).map(d => d.mesh);
+        const disHits = raycaster.intersectObjects(disMeshes);
+        disHits.forEach(h => intersects.push({ ...h, category: 'dis' }));
+    }
+    
+    if (airTrafficViz.group.visible && airTrafficViz.pointsMesh) {
         const airHits = raycaster.intersectObject(airTrafficViz.pointsMesh);
         airHits.forEach(h => intersects.push({ ...h, category: 'air' }));
     }
+    
     intersects.sort((a, b) => a.distance - b.distance);
     if (intersects.length > 0) {
         const hit = intersects[0];
@@ -261,7 +301,6 @@ function checkIntersections() {
         let html = '';
         
         if (hit.category === 'eq') {
-            // Formatage de la date
             const eqDate = data.time ? new Date(data.time).toISOString().substring(0, 19) + ' UTC' : 'N/A';
             html = `<strong>Séisme (USGS)</strong>
                     <div>Lieu: ${data.place}</div>
@@ -269,7 +308,6 @@ function checkIntersections() {
                     <div>Heure: ${eqDate}</div>
                     <div>Lat: ${data.lat.toFixed(2)}° | Lon: ${data.lon.toFixed(2)}°</div>`;
         } else if (hit.category === 'dis') {
-            // Formatage de la date EONET
             const disDate = data.date !== 'Date inconnue' ? new Date(data.date).toLocaleDateString('fr-FR') : 'N/A';
             html = `<strong>Alerte ${data.alert} (EONET)</strong>
                     <div>Type: ${data.category}</div>
@@ -301,11 +339,14 @@ let clock = new THREE.Clock();
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
+    
     controls.update();
+    globe.update(); // Fait tourner les nuages
     earthquakeViz.update(delta);
     disasterViz.update(delta);
     airTrafficViz.update();
     checkIntersections();
+    
     renderer.render(scene, camera);
 }
 animate();
