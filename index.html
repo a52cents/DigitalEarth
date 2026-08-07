@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Earth - Live</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <!-- canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- hud -->
+    <div id="hud">
+        <!-- clock -->
+        <div id="clock" class="hud-element">--:--:-- UTC</div>
+
+        <!-- theme selector -->
+        <div id="theme-selector" class="hud-element">
+            <button data-theme="dark" class="active">Dark</button>
+            <button data-theme="real">Real</button>
+            <button data-theme="wire">Wire</button>
+        </div>
+
+        <!-- legend -->
+        <div id="legend" class="hud-element">
+            <div><span class="dot pulse-dot"></span> Séismes (USGS)</div>
+            <div><span class="dot disaster-dot"></span> Alertes (ONU/GDACS)</div>
+            <div><span class="dot traffic-dot"></span> Trafic aérien (OpenSky)</div>
+        </div>
+
+        <!-- NOUVEAU : Panneau de Paramètres -->
+        <div id="settings-panel" class="hud-element">
+            <div class="settings-row">
+                <div class="toggle-group">
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-earthquakes" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-text">Séismes</span>
+                </div>
+
+                <div class="toggle-group">
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-disasters" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-text">Alertes</span>
+                </div>
+
+                <div class="toggle-group">
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-airtraffic" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-text">Avions</span>
+                </div>
+            </div>
+
+            <div class="settings-divider"></div>
+
+            <div class="settings-row">
+                <div class="toggle-group">
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-autorotate" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-text">Rotation Auto</span>
+                </div>
+
+                <div class="slider-group">
+                    <span class="toggle-text">Vitesse</span>
+                    <input type="range" id="rotation-speed" min="0" max="2" step="0.1" value="0.5" class="range-slider">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script type="module" src="/main.js"></script>
+</body>
+</html>
