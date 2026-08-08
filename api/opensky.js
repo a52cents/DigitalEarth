@@ -1,4 +1,14 @@
-// On augmente le temps maximum d'exécution à 60 secondes (au lieu de 10 par défaut)
+import { fetch as undiciFetch, Agent } from 'undici';
+
+// On force le serveur Vercel à utiliser IPv4 et un timeout long
+const agent = new Agent({
+  connect: {
+    family: 4, // Force IPv4
+    timeout: 20000
+  }
+});
+
+// On augmente le temps maximum d'exécution à 60 secondes
 export const config = {
   maxDuration: 60,
 };
@@ -17,13 +27,14 @@ async function getOpenSkyToken() {
     params.append('client_id', clientId);
     params.append('client_secret', clientSecret);
 
-    const response = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
+    const response = await undiciFetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DigitalEarth/1.0' // Contourne le bloqueur Cloudflare
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         },
-        body: params
+        body: params,
+        dispatcher: agent // Utilisation de l'agent qui force l'IPv4
     });
 
     if (!response.ok) throw new Error('Token fetch failed');
@@ -35,7 +46,6 @@ async function getOpenSkyToken() {
     return cachedToken;
 }
 
-// Le fallback au cas où l'API planterait quand même
 function generateFallbackFlights() {
     const flights = [];
     const hubs = [
@@ -52,13 +62,12 @@ function generateFallbackFlights() {
         const lat = start[0] + (end[0] - start[0]) * progress + (Math.random() - 0.5) * 15;
         const lon = start[1] + (end[1] - start[1]) * progress + (Math.random() - 0.5) * 15;
         
-        // Calcul du cap (heading) approximatif en degrés
         const dLon = (end[1] - lon) * Math.PI / 180;
         const y = Math.sin(dLon) * Math.cos(end[0] * Math.PI / 180);
         const x = Math.cos(lat * Math.PI / 180) * Math.sin(end[0] * Math.PI / 180) -
                   Math.sin(lat * Math.PI / 180) * Math.cos(end[0] * Math.PI / 180) * Math.cos(dLon);
         let heading = Math.atan2(y, x) * 180 / Math.PI;
-        heading = (heading + 360) % 360; // Normalisé entre 0 et 360
+        heading = (heading + 360) % 360;
         
         flights.push({
             callsign: `FLR${100 + i}`,
@@ -67,7 +76,7 @@ function generateFallbackFlights() {
             lat: lat,
             alt: 9000 + Math.random() * 4000,
             velocity: 700 + Math.random() * 200,
-            heading: heading // NOUVEAU : Direction calculée
+            heading: heading
         });
     }
     return flights;
@@ -77,11 +86,12 @@ export default async function handler(req, res) {
     try {
         const token = await getOpenSkyToken();
         
-        const response = await fetch('https://opensky-network.org/api/states/all', {
+        const response = await undiciFetch('https://opensky-network.org/api/states/all', {
             headers: { 
                 'Authorization': `Bearer ${token}`,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DigitalEarth/1.0' // Contourne le bloqueur Cloudflare
-            }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            dispatcher: agent
         });
 
         if (response.status === 401) {
@@ -101,7 +111,6 @@ export default async function handler(req, res) {
             velocity: state[9] ? Math.round(state[9] * 3.6) : 0
         })).filter(f => f.lat !== null && f.lon !== null);
 
-        // Cache Vercel de 2 minutes pour éviter de spammer l'API
         res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
         res.status(200).json({ flights });
         
