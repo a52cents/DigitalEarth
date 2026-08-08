@@ -1,13 +1,3 @@
-import { fetch as undiciFetch, Agent } from 'undici';
-
-// On force le serveur Vercel à utiliser IPv4 et un timeout long
-const agent = new Agent({
-  connect: {
-    family: 4, // Force IPv4
-    timeout: 20000
-  }
-});
-
 // On augmente le temps maximum d'exécution à 60 secondes
 export const config = {
   maxDuration: 60,
@@ -27,14 +17,13 @@ async function getOpenSkyToken() {
     params.append('client_id', clientId);
     params.append('client_secret', clientSecret);
 
-    const response = await undiciFetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
+    const response = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DigitalEarth/1.0'
         },
-        body: params,
-        dispatcher: agent // Utilisation de l'agent qui force l'IPv4
+        body: params
     });
 
     if (!response.ok) throw new Error('Token fetch failed');
@@ -46,6 +35,7 @@ async function getOpenSkyToken() {
     return cachedToken;
 }
 
+// Génère un trafic aérien réaliste basé sur les hubs mondiaux
 function generateFallbackFlights() {
     const flights = [];
     const hubs = [
@@ -62,6 +52,7 @@ function generateFallbackFlights() {
         const lat = start[0] + (end[0] - start[0]) * progress + (Math.random() - 0.5) * 15;
         const lon = start[1] + (end[1] - start[1]) * progress + (Math.random() - 0.5) * 15;
         
+        // Calcul du cap (heading) approximatif en degrés
         const dLon = (end[1] - lon) * Math.PI / 180;
         const y = Math.sin(dLon) * Math.cos(end[0] * Math.PI / 180);
         const x = Math.cos(lat * Math.PI / 180) * Math.sin(end[0] * Math.PI / 180) -
@@ -86,12 +77,11 @@ export default async function handler(req, res) {
     try {
         const token = await getOpenSkyToken();
         
-        const response = await undiciFetch('https://opensky-network.org/api/states/all', {
+        const response = await fetch('https://opensky-network.org/api/states/all', {
             headers: { 
                 'Authorization': `Bearer ${token}`,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
-            dispatcher: agent
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DigitalEarth/1.0'
+            }
         });
 
         if (response.status === 401) {
