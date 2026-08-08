@@ -88,6 +88,7 @@ export default async function handler(req, res) {
             lon: state[5],
             lat: state[6],
             alt: state[7] || 10000,
+            heading: state[10] || 0,
             velocity: state[9] ? Math.round(state[9] * 3.6) : 0
         })).filter(f => f.lat !== null && f.lon !== null);
 

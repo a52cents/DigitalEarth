@@ -7,15 +7,19 @@ export class DisasterVisualizer {
         this.activeDisasters = new Map();
         this.globeRadius = 5.1;
         
-        // NOUVEAU : Un groupe pour contenir toutes les catastrophes (facilite l'affichage ON/OFF)
         this.group = new THREE.Group();
         this.scene.add(this.group);
         
-        // Couleurs Néon pour un meilleur contraste
         this.textures = {
             Red: this.createHaloTexture('#FF0033'),
             Orange: this.createHaloTexture('#FF8800'),
             Green: this.createHaloTexture('#00FF88')
+        };
+        
+        this.colors = {
+            Red: 0xFF0033,
+            Orange: 0xFF8800,
+            Green: 0x00FF88
         };
     }
 
@@ -57,6 +61,7 @@ export class DisasterVisualizer {
         const position = this.latLonToVector3(lat, lon, this.globeRadius);
         const alertKey = alert.charAt(0).toUpperCase() + alert.slice(1).toLowerCase();
         const texture = this.textures[alertKey] || this.textures.Green;
+        const colorHex = this.colors[alertKey] || this.colors.Green;
 
         const size = alertKey === 'Red' ? 1.2 : (alertKey === 'Orange' ? 0.9 : 0.6);
 
@@ -74,7 +79,7 @@ export class DisasterVisualizer {
         halo.position.copy(position);
         halo.lookAt(new THREE.Vector3(0, 0, 0));
         
-        halo.userData = { 
+        const userData = { 
             type: 'Alerte', 
             name: name || 'Inconnu', 
             alert: alert, 
@@ -82,16 +87,38 @@ export class DisasterVisualizer {
             date: date || 'Date inconnue',
             source: source || 'Source inconnue'
         };
+        halo.userData = userData;
         
-        // MODIFICATION : On ajoute au groupe
         this.group.add(halo);
+        
+        // Faisceau LASER FIN (radius top 0.01, bottom 0.03) et moins haut
+        const beamHeight = alertKey === 'Red' ? 1.0 : (alertKey === 'Orange' ? 0.7 : 0.5);
+        const beamGeo = new THREE.CylinderGeometry(0.01, 0.03, beamHeight, 6, 1, true);
+        const beamMat = new THREE.MeshBasicMaterial({ 
+            color: colorHex, 
+            transparent: true, 
+            opacity: 0, 
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        
+        const normal = position.clone().normalize();
+        beam.position.copy(position).add(normal.clone().multiplyScalar(beamHeight / 2));
+        beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+        beam.userData = userData;
+        
+        this.group.add(beam);
         
         this.activeDisasters.set(id, { 
             mesh: halo, 
+            beam: beam, 
             targetOpacity: 0.9,
             currentOpacity: 0, 
             state: 'fadeIn',
-            baseSize: size
+            baseSize: size,
+            beamHeight: beamHeight
         });
     }
 
@@ -112,11 +139,18 @@ export class DisasterVisualizer {
             const time = Date.now() * 0.001;
             const pulse = 1 + Math.sin(time) * 0.15;
             disaster.mesh.scale.set(pulse, pulse, pulse);
+            
+            disaster.beam.material.opacity = disaster.currentOpacity * 0.6; 
+            const heightPulse = disaster.beamHeight * (1 + Math.sin(time * 1.5) * 0.05);
+            disaster.beam.scale.y = heightPulse / disaster.beamHeight;
 
             if (disaster.state === 'fadeOut' && disaster.currentOpacity < 0.01) {
-                this.group.remove(disaster.mesh); // MODIFICATION : On retire du groupe
+                this.group.remove(disaster.mesh);
+                this.group.remove(disaster.beam);
                 disaster.mesh.geometry.dispose();
                 disaster.mesh.material.dispose();
+                disaster.beam.geometry.dispose();
+                disaster.beam.material.dispose();
                 this.activeDisasters.delete(id);
             }
         });

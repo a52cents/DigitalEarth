@@ -26,6 +26,36 @@ body, html {
     z-index: 0;
 }
 
+/* --- OVERLAY CINÉMATOGRAPHIQUE --- */
+#cinematic-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 5; /* Au-dessus du canvas (0), en dessous du HUD (10) */
+    /* Vignette sombre sur les bords */
+    box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.8);
+}
+
+.scanlines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* Fines lignes horizontales répétées */
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 2px,
+        rgba(0, 0, 0, 0.15) 3px,
+        rgba(0, 0, 0, 0.15) 4px
+    );
+    opacity: 0.4;
+}
+
 /* --- GESTION DU HUD --- */
 #hud {
     position: fixed;
@@ -93,6 +123,72 @@ body, html {
 .pulse-dot { background-color: #FFFFFF; }
 .disaster-dot { background-color: #FF4500; }
 .traffic-dot { background-color: #FF8C00; }
+
+/* --- EVENT LOG FEED (Terminal) --- */
+#event-log {
+    top: 50px;
+    left: 20px;
+    width: 320px;
+    max-height: 220px;
+    background: rgba(10, 10, 10, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 2px solid var(--accent-color);
+    backdrop-filter: blur(4px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.log-header {
+    padding: 6px 10px;
+    color: var(--accent-color);
+    font-weight: bold;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 255, 255, 0.05);
+}
+
+#log-content {
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column-reverse; /* Les nouveaux logs apparaissent en bas */
+    gap: 4px;
+}
+
+.log-entry {
+    opacity: 0;
+    animation: fadeInLog 0.5s forwards;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.3;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+}
+
+.log-entry .time {
+    color: var(--accent-color);
+    margin-right: 6px;
+}
+
+.log-entry.disaster {
+    color: #FF8800;
+    text-shadow: 0 0 5px rgba(255, 136, 0, 0.3);
+}
+.log-entry.disaster .time {
+    color: #FF8800;
+}
+
+.log-entry.earthquake {
+    color: #FFFFFF;
+}
+.log-entry.earthquake .time {
+    color: #FFFFFF;
+}
+
+@keyframes fadeInLog {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 /* --- TOOLTIP --- */
 #tooltip {

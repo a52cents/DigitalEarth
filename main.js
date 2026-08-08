@@ -39,7 +39,6 @@ directionalLight.position.set(5, 3, 5);
 scene.add(directionalLight);
 
 // Le shader "Real" du globe a besoin de la direction du soleil à chaque frame
-// (utile si la lumière est un jour amenée à bouger : cycle jour/nuit, etc.)
 function syncSunDirection() {
     globe.sunDirection.copy(directionalLight.position).normalize();
 }
@@ -69,7 +68,7 @@ controls.dampingFactor = 0.05;
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.5;
 controls.minDistance = 8;
-controls.maxDistance = 20;
+controls.maxDistance = 100;
 
 let autoRotateTimeout;
 const autoRotateCheckbox = document.getElementById('toggle-autorotate');
@@ -79,7 +78,6 @@ controls.addEventListener('start', () => {
     clearTimeout(autoRotateTimeout);
 });
 controls.addEventListener('end', () => {
-    // Ne reprend l'auto-rotation que si l'interrupteur est coché
     if (autoRotateCheckbox.checked) {
         autoRotateTimeout = setTimeout(() => { controls.autoRotate = true; }, 3000);
     }
@@ -193,6 +191,21 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// NOUVEAU : Terminal de logs (Event Log)
+const logContent = document.getElementById('log-content');
+function addLogEntry(type, text) {
+    const timeStr = new Date().toISOString().substring(11, 19);
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.innerHTML = `<span class="time">${timeStr}</span>${text}`;
+    logContent.prepend(entry); // Ajoute en haut
+    
+    // Limite à 6 entrées pour ne pas déborder
+    while (logContent.children.length > 6) {
+        logContent.removeChild(logContent.lastChild);
+    }
+}
+
 // Gestion des boutons de thème
 const themeButtons = document.querySelectorAll('#theme-selector button');
 themeButtons.forEach(btn => {
@@ -205,7 +218,6 @@ themeButtons.forEach(btn => {
     });
 });
 
-// NOUVEAU : Gestion du panneau de paramètres
 const earthquakeViz = new EarthquakeVisualizer(scene);
 const disasterViz = new DisasterVisualizer(scene);
 const airTrafficViz = new AirTrafficVisualizer(scene);
@@ -246,10 +258,17 @@ async function updateEarthquakes() {
     earthquakes.forEach(eq => {
         if (!knownEarthquakeIds.has(eq.id)) {
             knownEarthquakeIds.add(eq.id);
-            const isRecent = true;
+            
+            // Vrai check temporel : est-ce que ça s'est passé il y a moins de 5 minutes ?
+            const isRecent = (Date.now() - eq.time) < 300000; 
+            
+            // On passe isRecent à la fonction d'affichage
+            earthquakeViz.addEarthquake(eq.lat, eq.lon, eq.mag, eq.id, eq.place, eq.time, isRecent);
+            
+            // On ne joue le son et le log QUE si c'est récent
             if (isRecent) {
-                earthquakeViz.addEarthquake(eq.lat, eq.lon, eq.mag, eq.id, eq.place, eq.time);
                 playEarthquakeSound(eq.mag);
+                addLogEntry('earthquake', `SÉISME M${eq.mag} - ${eq.place}`);
             }
         }
     });
@@ -267,6 +286,8 @@ async function updateDisasters() {
         if (!previousDisasterIds.has(d.id)) {
             disasterViz.addDisaster(d.lat, d.lon, d.alert, d.id, d.name, d.type, d.date, d.source);
             playDisasterSound(d.alert);
+            // NOUVEAU : On ajoute au terminal
+            addLogEntry('disaster', `ALERTE ${d.alert.toUpperCase()} - ${d.name}`);
         }
     });
     previousDisasterIds.forEach(id => {
@@ -304,7 +325,6 @@ function checkIntersections() {
     raycaster.setFromCamera(mouse, camera);
     const intersects = [];
     
-    // On ne raycast que les groupes visibles
     if (earthquakeViz.group.visible) {
         const eqMeshes = earthquakeViz.staticPoints.map(p => p.mesh);
         const eqHits = raycaster.intersectObjects(eqMeshes);
@@ -369,7 +389,7 @@ function animate() {
     const delta = clock.getDelta();
     
     controls.update();
-    globe.update(); // Fait tourner les nuages
+    globe.update(); 
     syncSunDirection();
     earthquakeViz.update(delta);
     disasterViz.update(delta);

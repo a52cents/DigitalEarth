@@ -4,17 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Digital Earth - Live</title>
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
     <!-- canvas -->
     <div id="canvas-container"></div>
 
+    <!-- NOUVEAU : Overlay cinématographique (Vignette + Scanlines) -->
+    <div id="cinematic-overlay">
+        <div class="scanlines"></div>
+    </div>
+
     <!-- hud -->
     <div id="hud">
         <!-- clock -->
         <div id="clock" class="hud-element">--:--:-- UTC</div>
+
+        <!-- NOUVEAU : Event Log Feed (Terminal) -->
+        <div id="event-log" class="hud-element">
+            <div class="log-header">SYSTEM LOG // LIVE FEED</div>
+            <div id="log-content"></div>
+        </div>
 
         <!-- theme selector -->
         <div id="theme-selector" class="hud-element">
@@ -30,7 +41,7 @@
             <div><span class="dot traffic-dot"></span> Trafic aérien (OpenSky)</div>
         </div>
 
-        <!-- NOUVEAU : Panneau de Paramètres -->
+        <!-- Panneau de Paramètres -->
         <div id="settings-panel" class="hud-element">
             <div class="settings-row">
                 <div class="toggle-group">

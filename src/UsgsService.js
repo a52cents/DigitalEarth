@@ -7,7 +7,6 @@ export async function fetchEarthquakes() {
         const response = await fetch(USGS_URL);
         if (!response.ok) throw new Error('Erreur réseau USGS');
         
-        // Sécurité : on s'assure qu'on reçoit bien du JSON valide
         const text = await response.text();
         let data;
         try {
@@ -17,7 +16,6 @@ export async function fetchEarthquakes() {
             return [];
         }
 
-        // On mappe les données pour ne garder que l'essentiel
         const earthquakes = (data.features || []).map(f => ({
             id: f.id,
             lat: f.geometry.coordinates[1],
@@ -26,7 +24,7 @@ export async function fetchEarthquakes() {
             mag: f.properties.mag,
             time: f.properties.time,
             place: f.properties.place || 'Localisation inconnue'
-        })).filter(eq => eq.mag >= 2.5); // On ignore les micro-séismes
+        })).filter(eq => eq.mag >= 1.0); // Baisé à 1.0 pour inclure les micro-séismes
 
         console.log(`%c[USGS] ${earthquakes.length} séismes récupérés.`, 'color: #00FFFF');
         return earthquakes;
