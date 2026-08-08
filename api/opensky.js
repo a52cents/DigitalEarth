@@ -1,101 +1,92 @@
+// Configuration magique de Vercel : transforme la fonction en Edge Function
+export const config = {
+  runtime: 'edge',
+};
+
 let cachedToken = null;
 let tokenExpiry = 0;
 
-async function getOpenSkyToken(env) {
-    if (cachedToken && Date.now() < tokenExpiry - 60000) return cachedToken;
+export default async function handler(req) {
+  try {
+    const clientId = process.env.OPENSKY_CLIENT_ID;
+    const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
 
-    const params = new URLSearchParams();
-    params.append('grant_type', 'client_credentials');
-    params.append('client_id', env.OPENSKY_CLIENT_ID);
-    params.append('client_secret', env.OPENSKY_CLIENT_SECRET);
+    // 1. Gestion du Token OAuth2
+    if (!cachedToken || Date.now() >= tokenExpiry - 60000) {
+      const params = new URLSearchParams();
+      params.append('grant_type', 'client_credentials');
+      params.append('client_id', clientId);
+      params.append('client_secret', clientSecret);
 
-    const response = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
+      const tokenRes = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
         method: 'POST',
         headers: { 
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'DigitalEarth/1.0 (Vercel Serverless)'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'DigitalEarth/1.0 (Vercel Edge)' // Un User-Agent propre aide parfois
         },
         body: params
+      });
+
+      if (!tokenRes.ok) {
+        return new Response(JSON.stringify({ flights: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const tokenData = await tokenRes.json();
+      cachedToken = tokenData.access_token;
+      tokenExpiry = Date.now() + (tokenData.expires_in * 1000);
+    }
+
+    // 2. Récupération des vols
+    const statesRes = await fetch('https://opensky-network.org/api/states/all', {
+      headers: { 
+        'Authorization': `Bearer ${cachedToken}`,
+        'User-Agent': 'DigitalEarth/1.0 (Vercel Edge)'
+      }
     });
 
-    if (!response.ok) throw new Error('Token fetch failed');
-    
-    const data = await response.json();
-    cachedToken = data.access_token;
-    tokenExpiry = Date.now() + (data.expires_in * 1000);
-    
-    return cachedToken;
-}
-
-// Génère des avions fictifs si l'API est bloquée par Vercel
-function generateFallbackFlights() {
-    const flights = [];
-    const realRoutes = [
-        [48.85, 2.35, 40.71, -74.0],   // Paris - New York
-        [51.51, -0.13, 35.68, 139.69], // Londres - Tokyo
-        [34.05, -118.24, -33.87, 151.21], // LA - Sydney
-        [1.35, 103.82, 25.20, 55.27],  // Singapour - Dubai
-        [-23.55, -46.63, 6.52, 3.38]   // Sao Paulo - Lagos
-    ];
-    
-    // On génère 5000 avions répartis sur les routes mondiales
-    for (let i = 0; i < 5000; i++) {
-        const route = realRoutes[i % realRoutes.length];
-        const progress = Math.random();
-        
-        const lat = route[0] + (route[2] - route[0]) * progress + (Math.random() - 0.5) * 10;
-        const lon = route[1] + (route[3] - route[1]) * progress + (Math.random() - 0.5) * 20;
-        
-        flights.push({
-            callsign: `FLR${1000 + i}`,
-            country: 'N/A',
-            lon: lon,
-            lat: lat,
-            alt: 9000 + Math.random() * 3000,
-            velocity: 700 + Math.random() * 200
-        });
+    // Si le token a expiré en cours de route, on force le refresh pour la prochaine fois
+    if (statesRes.status === 401) {
+      cachedToken = null;
     }
-    return flights;
-}
 
-export default async function handler(req, res) {
-    try {
-        const token = await getOpenSkyToken(process.env);
-        
-        const response = await fetch('https://opensky-network.org/api/states/all', {
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'User-Agent': 'DigitalEarth/1.0 (Vercel Serverless)'
-            }
-        });
-
-        if (response.status === 401) {
-            cachedToken = null; 
-        }
-        
-        if (!response.ok) throw new Error(`OpenSky API error: ${response.status}`);
-        
-        const data = await response.json();
-        
-        // On convertit le tableau brut en objets propres
-        const flights = (data.states || []).map(state => ({
-            callsign: state[1] ? state[1].trim() : 'N/A',
-            country: state[2] || 'Inconnu',
-            lon: state[5],
-            lat: state[6],
-            alt: state[7] || 10000,
-            velocity: state[9] ? Math.round(state[9] * 3.6) : 0
-        })).filter(f => f.lat !== null && f.lon !== null);
-
-        res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
-        res.status(200).json({ flights });
-        
-    } catch (error) {
-        console.error('OpenSky API inaccessible, utilisation du fallback:', error.message);
-        
-        // Au lieu de renvoyer un tableau vide, on renvoie le faux trafic
-        const fallbackFlights = generateFallbackFlights();
-        res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
-        res.status(200).json({ flights: fallbackFlights });
+    if (!statesRes.ok) {
+      return new Response(JSON.stringify({ flights: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
+
+    const data = await statesRes.json();
+
+    // 3. Nettoyage et formatage des données
+    const flights = (data.states || []).map(state => ({
+      callsign: state[1] ? state[1].trim() : 'N/A',
+      country: state[2] || 'Inconnu',
+      lon: state[5],
+      lat: state[6],
+      alt: state[7] || 10000,
+      velocity: state[9] ? Math.round(state[9] * 3.6) : 0
+    })).filter(f => f.lat !== null && f.lon !== null);
+
+    // 4. Renvoi de la réponse avec un Cache-Control
+    // Vercel va mettre ce résultat en cache pendant 2 minutes sur ses serveurs edge,
+    // ce qui divise par 1000 les requêtes vers OpenSky et évite les bannissements !
+    return new Response(JSON.stringify({ flights }), {
+      status: 200,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 's-maxage=120, stale-while-revalidate=60'
+      }
+    });
+
+  } catch (error) {
+    console.error('Edge OpenSky error:', error);
+    return new Response(JSON.stringify({ flights: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
