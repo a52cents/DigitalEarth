@@ -6,18 +6,27 @@ export async function fetchEarthquakes() {
     try {
         const response = await fetch(USGS_URL);
         if (!response.ok) throw new Error('Erreur réseau USGS');
-        const data = await response.json();
         
+        // Sécurité : on s'assure qu'on reçoit bien du JSON valide
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error('[USGS] Réponse non JSON reçue.');
+            return [];
+        }
+
         // On mappe les données pour ne garder que l'essentiel
-        const earthquakes = data.features.map(f => ({
+        const earthquakes = (data.features || []).map(f => ({
             id: f.id,
             lat: f.geometry.coordinates[1],
             lon: f.geometry.coordinates[0],
             depth: f.geometry.coordinates[2],
             mag: f.properties.mag,
             time: f.properties.time,
-            place: f.properties.place || 'Localisation inconnue' // NOUVEAU : On récupère le lieu
-        })).filter(eq => eq.mag >= 2.5); // On ignore les micro-séismes pour ne pas polluer visuellement
+            place: f.properties.place || 'Localisation inconnue'
+        })).filter(eq => eq.mag >= 2.5); // On ignore les micro-séismes
 
         console.log(`%c[USGS] ${earthquakes.length} séismes récupérés.`, 'color: #00FFFF');
         return earthquakes;

@@ -53,7 +53,7 @@ composer.addPass(new RenderPass(scene, camera));
 
 const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    1.0,   // strength
+    0.2,   // strength
     0.4,   // radius
     0.82   // threshold : seuls les pixels vifs (lumières de nuit, points radar, atmosphère) brillent
 );

@@ -1,6 +1,7 @@
 // src/GdacsService.js
 
-const EONET_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=50';
+// En production, on appelle notre route /api/gdacs
+const EONET_URL = '/api/gdacs';
 
 export async function fetchDisasters() {
     try {
@@ -8,7 +9,7 @@ export async function fetchDisasters() {
         if (!response.ok) throw new Error('Erreur réseau NASA EONET');
         const data = await response.json();
         
-        const disasters = data.events.map(event => {
+        const disasters = (data.events || []).map(event => {
             const geometry = event.geometry[0];
             let lat = null, lon = null;
             
@@ -16,12 +17,10 @@ export async function fetchDisasters() {
                 lon = geometry.coordinates[0];
                 lat = geometry.coordinates[1];
             } else if (geometry.type === 'Polygon') {
-                // Si c'est une zone, on prend le premier point du polygone
                 lon = geometry.coordinates[0][0][0];
                 lat = geometry.coordinates[0][0][1];
             }
 
-            // On simule le niveau d'alerte GDACS en fonction de la catégorie NASA
             const categoryId = event.categories[0].id;
             let alertLevel = 'Green';
             if (categoryId === 'severeStorms' || categoryId === 'seaLakeIce') {
@@ -30,7 +29,6 @@ export async function fetchDisasters() {
                 alertLevel = 'Orange';
             }
 
-            // NOUVEAU : Récupération de la date et de la source
             const date = geometry.date || 'Date inconnue';
             const source = (event.sources && event.sources.length > 0) 
                 ? event.sources[0].id 

@@ -248,7 +248,8 @@ export class Globe {
     }
 
     createAtmosphere() {
-        const geometry = new THREE.SphereGeometry(this.radius * 1.1, 96, 96);
+        // Épaisseur réduite à 1.025 (au lieu de 1.1) pour un liseré fin collé à la surface
+        const geometry = new THREE.SphereGeometry(this.radius * 1.025, 64, 64);
         this.atmosphereMat = new THREE.ShaderMaterial({
             vertexShader: ATMOSPHERE_VERTEX_SHADER,
             fragmentShader: ATMOSPHERE_FRAGMENT_SHADER,
@@ -265,25 +266,6 @@ export class Globe {
         });
         this.atmosphere = new THREE.Mesh(geometry, this.atmosphereMat);
         this.group.add(this.atmosphere);
-
-        // Halo interne fin, collé à la surface (transition douce texture -> atmosphère)
-        this.rimMat = new THREE.ShaderMaterial({
-            vertexShader: ATMOSPHERE_VERTEX_SHADER,
-            fragmentShader: ATMOSPHERE_FRAGMENT_SHADER,
-            uniforms: {
-                sunDirection: { value: this.sunDirection },
-                dayColor: { value: new THREE.Color(0x8fd3ff) },
-                twilightColor: { value: new THREE.Color(0xffb066) },
-                intensity: { value: 0.6 }
-            },
-            side: THREE.FrontSide,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            depthWrite: false
-        });
-        const rimGeo = new THREE.SphereGeometry(this.radius * 1.015, 96, 96);
-        this.rim = new THREE.Mesh(rimGeo, this.rimMat);
-        this.group.add(this.rim);
     }
 
     createGrid() {
@@ -351,7 +333,6 @@ export class Globe {
     setTheme(theme) {
         this.grid.visible = false;
         this.atmosphere.visible = true;
-        this.rim.visible = true;
         this.clouds.visible = false;
         this.starfield.visible = true;
 
@@ -361,7 +342,6 @@ export class Globe {
                 this.grid.visible = true;
                 this.atmosphereMat.uniforms.dayColor.value.set(0x00FFFF);
                 this.atmosphereMat.uniforms.twilightColor.value.set(0x00FFFF);
-                this.rim.visible = false;
                 this.gridMat.color.set(0x00FFFF);
                 this.starfield.visible = true;
                 break;
@@ -371,13 +351,11 @@ export class Globe {
                 this.cloudMaterial.opacity = 0.85;
                 this.atmosphereMat.uniforms.dayColor.value.set(0x4db2ff);
                 this.atmosphereMat.uniforms.twilightColor.value.set(0xff8a3d);
-                this.rim.visible = true;
                 this.starfield.visible = true;
                 break;
             case 'wire':
                 this.earth.material = this.wireMaterial;
                 this.atmosphere.visible = false;
-                this.rim.visible = false;
                 this.grid.visible = true;
                 this.gridMat.color.set(0x00FF00);
                 this.starfield.visible = true;
