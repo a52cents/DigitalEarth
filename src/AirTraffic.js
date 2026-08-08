@@ -44,11 +44,11 @@ export class AirTrafficVisualizer {
         const texture = this.createCircleTexture();
 
         const material = new THREE.PointsMaterial({
-            size: 0.12, 
-            color: 0xFF00FF,
+            size: 0.09,
+            color: 0xFF3DF0,
             map: texture,
             transparent: true,
-            opacity: 0.8, 
+            opacity: 1.0,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
             sizeAttenuation: true
@@ -59,19 +59,23 @@ export class AirTrafficVisualizer {
     }
 
     createCircleTexture() {
+        // Coeur net (petit disque plein) + chute rapide vers la transparence.
+        // Le halo "premium" est désormais produit par le bloom du renderer,
+        // pas par un dégradé étalé dans la texture (qui donnait l'effet flou).
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
+        canvas.width = 128;
+        canvas.height = 128;
         const context = canvas.getContext('2d');
-        const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
-        
+        const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+
         gradient.addColorStop(0, 'rgba(255,255,255,1)');
-        gradient.addColorStop(0.1, 'rgba(255,0,255,1)');
-        gradient.addColorStop(0.4, 'rgba(255,0,255,0.4)');
-        gradient.addColorStop(1, 'rgba(0,0,0,0)');
-        
+        gradient.addColorStop(0.22, 'rgba(255,255,255,1)');
+        gradient.addColorStop(0.35, 'rgba(255,61,240,1)');
+        gradient.addColorStop(0.6, 'rgba(255,61,240,0.35)');
+        gradient.addColorStop(1, 'rgba(255,61,240,0)');
+
         context.fillStyle = gradient;
-        context.fillRect(0, 0, 64, 64);
+        context.fillRect(0, 0, 128, 128);
         return new THREE.CanvasTexture(canvas);
     }
 

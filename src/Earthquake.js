@@ -31,7 +31,7 @@ export class EarthquakeVisualizer {
         const intensity = Math.max(0.5, mag - 2);
         
         // 1. Le point fixe (Épicentre lumineux)
-        const pointGeo = new THREE.SphereGeometry(0.04 * intensity, 8, 8);
+        const pointGeo = new THREE.SphereGeometry(0.04 * intensity, 16, 16);
         const pointMat = new THREE.MeshBasicMaterial({ 
             color: 0xFFFFFF,
             blending: THREE.AdditiveBlending, 

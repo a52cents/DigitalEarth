@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Globe } from './src/Globe.js';
 import { fetchEarthquakes } from './src/UsgsService.js';
 import { EarthquakeVisualizer } from './src/Earthquake.js';
@@ -18,7 +22,9 @@ camera.position.set(0, 0, 15);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 container.appendChild(renderer.domElement);
 
 // ==========================================
@@ -26,11 +32,33 @@ container.appendChild(renderer.domElement);
 // ==========================================
 const globe = new Globe(scene);
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 2.2);
 directionalLight.position.set(5, 3, 5);
 scene.add(directionalLight);
+
+// Le shader "Real" du globe a besoin de la direction du soleil à chaque frame
+// (utile si la lumière est un jour amenée à bouger : cycle jour/nuit, etc.)
+function syncSunDirection() {
+    globe.sunDirection.copy(directionalLight.position).normalize();
+}
+syncSunDirection();
+
+// ==========================================
+// 2b. POST-PROCESSING (Bloom sélectif sur les éléments lumineux)
+// ==========================================
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    1.0,   // strength
+    0.4,   // radius
+    0.82   // threshold : seuls les pixels vifs (lumières de nuit, points radar, atmosphère) brillent
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
 
 // ==========================================
 // 3. CONTRÔLES CAMÉRA
@@ -342,12 +370,13 @@ function animate() {
     
     controls.update();
     globe.update(); // Fait tourner les nuages
+    syncSunDirection();
     earthquakeViz.update(delta);
     disasterViz.update(delta);
     airTrafficViz.update();
     checkIntersections();
     
-    renderer.render(scene, camera);
+    composer.render();
 }
 animate();
 
@@ -355,4 +384,6 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    bloomPass.setSize(window.innerWidth, window.innerHeight);
 });
