@@ -52,13 +52,22 @@ function generateFallbackFlights() {
         const lat = start[0] + (end[0] - start[0]) * progress + (Math.random() - 0.5) * 15;
         const lon = start[1] + (end[1] - start[1]) * progress + (Math.random() - 0.5) * 15;
         
+        // Calcul du cap (heading) approximatif en degrés
+        const dLon = (end[1] - lon) * Math.PI / 180;
+        const y = Math.sin(dLon) * Math.cos(end[0] * Math.PI / 180);
+        const x = Math.cos(lat * Math.PI / 180) * Math.sin(end[0] * Math.PI / 180) -
+                  Math.sin(lat * Math.PI / 180) * Math.cos(end[0] * Math.PI / 180) * Math.cos(dLon);
+        let heading = Math.atan2(y, x) * 180 / Math.PI;
+        heading = (heading + 360) % 360; // Normalisé entre 0 et 360
+        
         flights.push({
             callsign: `FLR${100 + i}`,
             country: 'N/A',
             lon: lon,
             lat: lat,
             alt: 9000 + Math.random() * 4000,
-            velocity: 700 + Math.random() * 200
+            velocity: 700 + Math.random() * 200,
+            heading: heading // NOUVEAU : Direction calculée
         });
     }
     return flights;
