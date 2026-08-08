@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
             }
           });
 
-          server.middlewares.use('/api/opensky', async (req, res) => {
+                   server.middlewares.use('/api/opensky', async (req, res) => {
             try {
               const token = await getLocalOpenSkyToken();
               const response = await fetch('https://opensky-network.org/api/states/all', {
@@ -56,16 +56,25 @@ export default defineConfig(({ mode }) => {
               if (response.status === 401) {
                   localCachedToken = null;
                   res.statusCode = 200;
-                  return res.end(JSON.stringify({ states: [] }));
+                  return res.end(JSON.stringify({ flights: [] }));
               }
               
-              const data = await response.text();
+              const data = await response.json();
+              const flights = (data.states || []).map(state => ({
+                  callsign: state[1] ? state[1].trim() : 'N/A',
+                  country: state[2] || 'Inconnu',
+                  lon: state[5],
+                  lat: state[6],
+                  alt: state[7] || 10000,
+                  velocity: state[9] ? Math.round(state[9] * 3.6) : 0
+              })).filter(f => f.lat !== null && f.lon !== null);
+              
               res.setHeader('Content-Type', 'application/json');
-              res.end(data);
+              res.end(JSON.stringify({ flights }));
             } catch (error) {
               console.error(error);
               res.statusCode = 200;
-              res.end(JSON.stringify({ states: [] }));
+              res.end(JSON.stringify({ flights: [] }));
             }
           });
         }
