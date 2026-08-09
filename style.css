@@ -36,7 +36,7 @@ body, html {
     pointer-events: none;
     z-index: 5; /* Au-dessus du canvas (0), en dessous du HUD (10) */
     /* Vignette sombre sur les bords */
-    box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.8);
+    box-shadow: inset 0 0 200px 60px rgba(0,0,0, 0.8);
 }
 
 .scanlines {
@@ -148,6 +148,7 @@ body, html {
     letter-spacing: 1px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(0, 255, 255, 0.05);
+    flex-shrink: 0; /* Empêche le header de rétrécir */
 }
 
 #log-content {
@@ -155,6 +156,23 @@ body, html {
     display: flex;
     flex-direction: column-reverse; /* Les nouveaux logs apparaissent en bas */
     gap: 4px;
+    overflow-y: auto; /* Rend la zone scrollable */
+    flex-grow: 1;
+}
+
+/* Scrollbar discrète style Terminal */
+#log-content::-webkit-scrollbar {
+    width: 4px;
+}
+#log-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+#log-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 255, 0.3);
+    border-radius: 2px;
+}
+#log-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 255, 0.6);
 }
 
 .log-entry {
@@ -163,6 +181,14 @@ body, html {
     color: rgba(255, 255, 255, 0.8);
     line-height: 1.3;
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+    padding: 4px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.log-entry:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .log-entry .time {

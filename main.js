@@ -11,6 +11,8 @@ import { fetchDisasters } from './src/GdacsService.js';
 import { DisasterVisualizer } from './src/Disaster.js';
 import { fetchAirTraffic } from './src/OpenSkyService.js';
 import { AirTrafficVisualizer } from './src/AirTraffic.js';
+import { fetchSatellites } from './src/SatelliteService.js';
+import { SatelliteVisualizer } from './src/Satellites.js';
 
 // ==========================================
 // 1. CONFIGURATION DE BASE THREE.JS
@@ -26,6 +28,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 container.appendChild(renderer.domElement);
+
+const clock = new THREE.Clock(); // Déplacé en haut pour être accessible partout
 
 // ==========================================
 // 2. LE GLOBE
@@ -171,7 +175,7 @@ function playDisasterSound(alertLevel) {
 document.body.addEventListener('click', initAudio, { once: true });
 
 // ==========================================
-// 5. LOGIQUE UI
+// 5. LOGIQUE UI & EVENT LOG FLYTO
 // ==========================================
 const hud = document.getElementById('hud');
 let hudTimeout;
@@ -191,17 +195,63 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// NOUVEAU : Terminal de logs (Event Log)
+// NOUVEAU : Système de déplacement de caméra (FlyTo) et de visée
+let isFlying = false;
+let targetCamPos = null;
+let targetRing = null;
+let targetRingStartTime = 0;
+
+function latLonToVector3(lat, lon, radius) {
+    const phi = (90 - lat) * (Math.PI / 180);
+    const theta = (lon) * (Math.PI / 180);
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.cos(phi);
+    const z = -radius * Math.sin(phi) * Math.sin(theta);
+    return new THREE.Vector3(x, y, z);
+}
+
+function flyTo(lat, lon) {
+    const targetDistance = 8.5; // Zoom assez proche pour bien voir l'événement
+    targetCamPos = latLonToVector3(lat, lon, targetDistance);
+    
+    isFlying = true;
+    controls.autoRotate = false;
+    autoRotateCheckbox.checked = false; // Décoche le bouton de rotation auto
+    showHUD();
+
+    // Création de l'anneau de visée (Targeting Reticle)
+    if (targetRing) scene.remove(targetRing);
+    const ringGeo = new THREE.RingGeometry(0.3, 0.35, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ 
+        color: 0x00FFFF, 
+        side: THREE.DoubleSide, 
+        transparent: true, 
+        opacity: 1,
+        blending: THREE.AdditiveBlending
+    });
+    targetRing = new THREE.Mesh(ringGeo, ringMat);
+    const ringPos = latLonToVector3(lat, lon, 5.05);
+    targetRing.position.copy(ringPos);
+    targetRing.lookAt(new THREE.Vector3(0, 0, 0));
+    scene.add(targetRing);
+    targetRingStartTime = clock.getElapsedTime();
+}
+
 const logContent = document.getElementById('log-content');
-function addLogEntry(type, text) {
+function addLogEntry(type, text, lat = null, lon = null) {
     const timeStr = new Date().toISOString().substring(11, 19);
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
-    entry.innerHTML = `<span class="time">${timeStr}</span>${text}`;
-    logContent.prepend(entry); // Ajoute en haut
+    // MODIFICATION ICI : ajout d'un espace et d'un tiret après le span
+    entry.innerHTML = `<span class="time">${timeStr}</span> - ${text}`;
     
-    // Limite à 6 entrées pour ne pas déborder
-    while (logContent.children.length > 6) {
+    if (lat !== null && lon !== null) {
+        entry.addEventListener('click', () => flyTo(lat, lon));
+    }
+    
+    logContent.prepend(entry); 
+    
+    while (logContent.children.length > 50) {
         logContent.removeChild(logContent.lastChild);
     }
 }
@@ -221,6 +271,7 @@ themeButtons.forEach(btn => {
 const earthquakeViz = new EarthquakeVisualizer(scene);
 const disasterViz = new DisasterVisualizer(scene);
 const airTrafficViz = new AirTrafficVisualizer(scene);
+const satelliteViz = new SatelliteVisualizer(scene);
 
 document.getElementById('toggle-earthquakes').addEventListener('change', (e) => {
     earthquakeViz.group.visible = e.target.checked;
@@ -237,6 +288,14 @@ document.getElementById('toggle-airtraffic').addEventListener('change', (e) => {
     showHUD();
 });
 
+const satToggle = document.getElementById('toggle-satellites');
+if (satToggle) {
+    satToggle.addEventListener('change', (e) => {
+        satelliteViz.group.visible = e.target.checked;
+        showHUD();
+    });
+}
+
 autoRotateCheckbox.addEventListener('change', (e) => {
     controls.autoRotate = e.target.checked;
     if (!e.target.checked) clearTimeout(autoRotateTimeout);
@@ -252,44 +311,67 @@ document.getElementById('rotation-speed').addEventListener('input', (e) => {
 // 6. INTÉGRATION DES DONNÉES
 // ==========================================
 let knownEarthquakeIds = new Set();
+let isInitialEarthquakeLoad = true;
 
 async function updateEarthquakes() {
     const earthquakes = await fetchEarthquakes();
+    let recentCount = 0;
+    
     earthquakes.forEach(eq => {
         if (!knownEarthquakeIds.has(eq.id)) {
             knownEarthquakeIds.add(eq.id);
             
-            // Vrai check temporel : est-ce que ça s'est passé il y a moins de 5 minutes ?
             const isRecent = (Date.now() - eq.time) < 300000; 
             
-            // On passe isRecent à la fonction d'affichage
             earthquakeViz.addEarthquake(eq.lat, eq.lon, eq.mag, eq.id, eq.place, eq.time, isRecent);
             
-            // On ne joue le son et le log QUE si c'est récent
             if (isRecent) {
                 playEarthquakeSound(eq.mag);
-                addLogEntry('earthquake', `SÉISME M${eq.mag} - ${eq.place}`);
+                addLogEntry('earthquake', `SÉISME M${eq.mag} - ${eq.place}`, eq.lat, eq.lon);
             }
         }
     });
+
+    // NOUVEAU : Résumé au chargement initial
+    if (isInitialEarthquakeLoad) {
+        // On compte les séismes qui se sont produits dans les dernières 2 heures pour le résumé
+        recentCount = earthquakes.filter(eq => (Date.now() - eq.time) < 7200000).length;
+        if (recentCount > 0) {
+            addLogEntry('earthquake', `${recentCount} SÉISMES RÉCENTS (2H)`);
+        }
+        isInitialEarthquakeLoad = false;
+    }
 }
 updateEarthquakes();
 setInterval(updateEarthquakes, 300000);
 
 let previousDisasterIds = new Set();
+let isInitialDisasterLoad = true;
 
 async function updateDisasters() {
     const disasters = await fetchDisasters();
     const currentDisasterIds = new Set();
+    let newAlertsCount = 0;
+    
     disasters.forEach(d => {
         currentDisasterIds.add(d.id);
         if (!previousDisasterIds.has(d.id)) {
             disasterViz.addDisaster(d.lat, d.lon, d.alert, d.id, d.name, d.type, d.date, d.source);
             playDisasterSound(d.alert);
-            // NOUVEAU : On ajoute au terminal
-            addLogEntry('disaster', `ALERTE ${d.alert.toUpperCase()} - ${d.name}`);
+            newAlertsCount++;
+            
+            if (!isInitialDisasterLoad) {
+                // On passe d.lat et d.lon pour le clic
+                addLogEntry('disaster', `ALERTE ${d.alert.toUpperCase()} - ${d.name}`, d.lat, d.lon);
+            }
         }
     });
+    
+    if (isInitialDisasterLoad && newAlertsCount > 0) {
+        addLogEntry('disaster', `${newAlertsCount} ALERTES ACTIVES DÉTECTÉES`);
+        isInitialDisasterLoad = false;
+    }
+    
     previousDisasterIds.forEach(id => {
         if (!currentDisasterIds.has(id)) disasterViz.removeDisaster(id);
     });
@@ -304,6 +386,13 @@ async function updateAirTraffic() {
 }
 updateAirTraffic();
 setInterval(updateAirTraffic, 120000);
+
+async function updateSatellites() {
+    const satellites = await fetchSatellites();
+    if (satellites.length > 0) satelliteViz.updateSatellites(satellites);
+}
+updateSatellites();
+setInterval(updateSatellites, 60000);
 
 // ==========================================
 // 7. RAYCASTING (TOOLTIP)
@@ -341,6 +430,11 @@ function checkIntersections() {
         const airHits = raycaster.intersectObject(airTrafficViz.pointsMesh);
         airHits.forEach(h => intersects.push({ ...h, category: 'air' }));
     }
+
+    if (satelliteViz.group.visible && satelliteViz.pointsMesh) {
+        const satHits = raycaster.intersectObject(satelliteViz.pointsMesh);
+        satHits.forEach(h => intersects.push({ ...h, category: 'sat' }));
+    }
     
     intersects.sort((a, b) => a.distance - b.distance);
     if (intersects.length > 0) {
@@ -372,6 +466,15 @@ function checkIntersections() {
                         <div>Vitesse: ${flight.velocity} km/h</div>
                         <div>Lat: ${flight.lat.toFixed(2)}° | Lon: ${flight.lon.toFixed(2)}°</div>`;
             }
+        } else if (hit.category === 'sat') {
+            const sat = satelliteViz.satData[hit.index];
+            if (sat) {
+                html = `<strong>Satellite (Starlink)</strong>
+                        <div>Nom: <b>${sat.name}</b></div>
+                        <div>Altitude: ${sat.alt.toFixed(0)} km</div>
+                        <div>Vitesse: ${sat.velocity} km/h</div>
+                        <div>Lat: ${sat.lat.toFixed(2)}° | Lon: ${sat.lon.toFixed(2)}°</div>`;
+            }
         }
         if (html) { tooltip.innerHTML = html; tooltip.style.display = 'block'; }
     } else {
@@ -382,7 +485,6 @@ function checkIntersections() {
 // ==========================================
 // 8. BOUCLE DE RENDU
 // ==========================================
-let clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
@@ -394,7 +496,34 @@ function animate() {
     earthquakeViz.update(delta);
     disasterViz.update(delta);
     airTrafficViz.update();
+    satelliteViz.update();
     checkIntersections();
+    
+    // Gestion du déplacement fluide de la caméra (FlyTo)
+    if (isFlying && targetCamPos) {
+        camera.position.lerp(targetCamPos, 0.05);
+        if (camera.position.distanceTo(targetCamPos) < 0.1) {
+            isFlying = false;
+        }
+    }
+
+    // Gestion de l'anneau de visée temporaire
+    if (targetRing) {
+        const elapsed = clock.getElapsedTime() - targetRingStartTime;
+        const duration = 3.0; // L'anneau dure 3 secondes
+        
+        if (elapsed > duration) {
+            scene.remove(targetRing);
+            targetRing.geometry.dispose();
+            targetRing.material.dispose();
+            targetRing = null;
+        } else {
+            const progress = elapsed / duration;
+            const scale = 1 + (progress * 4); // Il s'agrandit
+            targetRing.scale.set(scale, scale, scale);
+            targetRing.material.opacity = 1 - progress; // Il s'estompe
+        }
+    }
     
     composer.render();
 }
