@@ -16,6 +16,9 @@
         <div class="scanlines"></div>
     </div>
 
+    <!-- NOUVEAU : Flash "obturateur" au moment de la capture -->
+    <div id="shutter-flash"></div>
+
     <!-- hud -->
     <div id="hud">
         <!-- clock -->
@@ -86,6 +89,13 @@
                 </div>
             </div>
         </div>
+        <!-- NOUVEAU : Bouton de capture cinématique -->
+        <button id="capture-btn" class="hud-element" title="Capturer la vue actuelle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 8h2.5L8 5.5h8L17.5 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+                <circle cx="12" cy="13" r="3.5" />
+            </svg>
+        </button>
     </div>
 
     <div id="tooltip"></div>

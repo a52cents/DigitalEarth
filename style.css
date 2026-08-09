@@ -216,6 +216,55 @@ body, html {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* --- CAPTURE CINÉMATIQUE --- */
+#capture-btn {
+    bottom: 20px;
+    left: 20px;
+    width: 40px;
+    height: 40px;
+    background: rgba(10, 10, 10, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    transition: all 0.3s;
+    color: var(--hud-color);
+}
+
+#capture-btn:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+}
+
+#capture-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Flash blanc bref au moment du clic, façon obturateur d'appareil photo */
+#shutter-flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 50;
+    transition: opacity 0.08s ease;
+}
+
+#shutter-flash.active {
+    opacity: 0.7;
+    transition: opacity 0.03s ease;
+}
+
 /* --- TOOLTIP --- */
 #tooltip {
     position: fixed;

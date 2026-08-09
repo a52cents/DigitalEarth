@@ -88,6 +88,28 @@ controls.addEventListener('end', () => {
 });
 
 // ==========================================
+// 3b. INTRO CINÉMATIQUE (arrivée depuis l'espace)
+// ==========================================
+// La caméra démarre loin, légèrement décalée sur les axes X/Y, puis vient se poser
+// en douceur sur sa position de croisière (0,0,15). Pendant la séquence, les
+// contrôles utilisateur et la rotation auto sont coupés pour ne pas interférer
+// avec la trajectoire scriptée.
+const introStartPos = new THREE.Vector3(22, 14, 78);
+const introEndPos = camera.position.clone();
+const INTRO_DURATION = 4; // secondes
+
+camera.position.copy(introStartPos);
+controls.enabled = false;
+controls.autoRotate = false;
+
+let introActive = true;
+let introElapsed = 0;
+
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+// ==========================================
 // 4. AUDIO PROCÉDURAL
 // ==========================================
 let audioCtx;
@@ -184,8 +206,13 @@ function showHUD() {
     clearTimeout(hudTimeout);
     hudTimeout = setTimeout(() => { hud.classList.add('hidden'); }, 10000);
 }
-document.addEventListener('mousemove', showHUD);
-showHUD();
+// Le HUD reste masqué tant que l'intro cinématique joue, pour laisser l'arrivée
+// caméra respirer sans overlay. Il apparaît en fondu (la transition CSS existe déjà
+// sur #hud) une fois la séquence terminée — voir la section 8 (boucle de rendu).
+hud.classList.add('hidden');
+document.addEventListener('mousemove', () => {
+    if (!introActive) showHUD();
+});
 
 const clockElement = document.getElementById('clock');
 function updateClock() {
@@ -306,6 +333,97 @@ document.getElementById('rotation-speed').addEventListener('input', (e) => {
     controls.autoRotateSpeed = parseFloat(e.target.value);
     showHUD();
 });
+
+// ==========================================
+// 5b. CAPTURE CINÉMATIQUE
+// ==========================================
+// La capture se fait DANS la boucle de rendu (juste après composer.render()),
+// jamais depuis le handler de clic directement : sans ça le buffer WebGL peut déjà
+// être vidé par le navigateur au moment où on lit ses pixels (pas de
+// preserveDrawingBuffer ici pour ne pas payer son coût de perf en continu).
+const captureBtn = document.getElementById('capture-btn');
+const shutterFlash = document.getElementById('shutter-flash');
+let captureRequested = false;
+
+if (captureBtn) {
+    captureBtn.addEventListener('click', () => {
+        captureRequested = true;
+        showHUD();
+    });
+}
+
+function playShutterSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.09);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.09);
+}
+
+// Compose le rendu WebGL brut avec un léger habillage (vignette, horloge, watermark)
+// cohérent avec l'esthétique du HUD, puis déclenche le téléchargement du PNG.
+function performCapture() {
+    const sourceCanvas = renderer.domElement;
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = sourceCanvas.width;
+    outCanvas.height = sourceCanvas.height;
+    const ctx = outCanvas.getContext('2d');
+
+    ctx.drawImage(sourceCanvas, 0, 0, outCanvas.width, outCanvas.height);
+
+    // Vignette additionnelle (au-delà de celle déjà à l'écran) pour un rendu "capture"
+    const vignette = ctx.createRadialGradient(
+        outCanvas.width / 2, outCanvas.height / 2, outCanvas.height / 3,
+        outCanvas.width / 2, outCanvas.height / 2, outCanvas.height / 1.1
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+
+    // Habillage texte, mis à l'échelle de la résolution de capture (Full HD = référence)
+    const scale = outCanvas.width / 1920;
+
+    ctx.shadowColor = 'rgba(0, 255, 255, 0.6)';
+    ctx.shadowBlur = 8 * scale;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.font = `${28 * scale}px "JetBrains Mono", monospace`;
+    ctx.fillText('DIGITAL EARTH // LIVE', 30 * scale, 46 * scale);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.85)';
+    ctx.font = `${16 * scale}px "JetBrains Mono", monospace`;
+    const timeStr = new Date().toISOString().substring(0, 19).replace('T', ' ') + ' UTC';
+    ctx.fillText(timeStr, 30 * scale, 46 * scale + 26 * scale);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = `${14 * scale}px "JetBrains Mono", monospace`;
+    ctx.fillText('digital-earth-nine.vercel.app', outCanvas.width - 30 * scale, outCanvas.height - 30 * scale);
+    ctx.textAlign = 'left';
+
+    const dataUrl = outCanvas.toDataURL('image/png');
+
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `digital-earth-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    playShutterSound();
+    if (shutterFlash) {
+        shutterFlash.classList.add('active');
+        setTimeout(() => shutterFlash.classList.remove('active'), 90);
+    }
+}
 
 // ==========================================
 // 6. INTÉGRATION DES DONNÉES
@@ -498,7 +616,21 @@ function animate() {
     airTrafficViz.update();
     satelliteViz.update();
     checkIntersections();
-    
+
+    // Gestion de l'intro cinématique (arrivée caméra depuis l'espace)
+    if (introActive) {
+        introElapsed += delta;
+        const t = Math.min(introElapsed / INTRO_DURATION, 1);
+        camera.position.lerpVectors(introStartPos, introEndPos, easeOutCubic(t));
+
+        if (t >= 1) {
+            introActive = false;
+            controls.enabled = true;
+            controls.autoRotate = autoRotateCheckbox.checked;
+            showHUD();
+        }
+    }
+
     // Gestion du déplacement fluide de la caméra (FlyTo)
     if (isFlying && targetCamPos) {
         camera.position.lerp(targetCamPos, 0.05);
@@ -526,6 +658,11 @@ function animate() {
     }
     
     composer.render();
+
+    if (captureRequested) {
+        captureRequested = false;
+        performCapture();
+    }
 }
 animate();
 
