@@ -90,10 +90,6 @@ controls.addEventListener('end', () => {
 // ==========================================
 // 3b. INTRO CINÉMATIQUE (arrivée depuis l'espace)
 // ==========================================
-// La caméra démarre loin, légèrement décalée sur les axes X/Y, puis vient se poser
-// en douceur sur sa position de croisière (0,0,15). Pendant la séquence, les
-// contrôles utilisateur et la rotation auto sont coupés pour ne pas interférer
-// avec la trajectoire scriptée.
 const introStartPos = new THREE.Vector3(22, 14, 78);
 const introEndPos = camera.position.clone();
 const INTRO_DURATION = 4; // secondes
@@ -197,7 +193,7 @@ function playDisasterSound(alertLevel) {
 document.body.addEventListener('click', initAudio, { once: true });
 
 // ==========================================
-// 5. LOGIQUE UI & EVENT LOG FLYTO
+// 5. LOGIQUE UI, EVENT LOG & VITAL SIGNS
 // ==========================================
 const hud = document.getElementById('hud');
 let hudTimeout;
@@ -206,9 +202,7 @@ function showHUD() {
     clearTimeout(hudTimeout);
     hudTimeout = setTimeout(() => { hud.classList.add('hidden'); }, 10000);
 }
-// Le HUD reste masqué tant que l'intro cinématique joue, pour laisser l'arrivée
-// caméra respirer sans overlay. Il apparaît en fondu (la transition CSS existe déjà
-// sur #hud) une fois la séquence terminée — voir la section 8 (boucle de rendu).
+
 hud.classList.add('hidden');
 document.addEventListener('mousemove', () => {
     if (!introActive) showHUD();
@@ -222,7 +216,29 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// NOUVEAU : Système de déplacement de caméra (FlyTo) et de visée
+// --- NOUVEAU : MONITEUR DE SIGNES VITAUX ---
+const valPulse = document.getElementById('val-pulse');
+const valResp = document.getElementById('val-resp');
+const valImmune = document.getElementById('val-immune');
+const valNervous = document.getElementById('val-nervous');
+
+// Variables pour l'animation ECG
+const ecgCanvas = document.getElementById('ecg-canvas');
+const ecgCtx = ecgCanvas.getContext('2d');
+const ecgPoints = new Array(120).fill(12);
+let heartbeatTimer = 0;
+let currentBPM = 60; // Valeur par défaut
+
+// Met à jour une valeur du moniteur et déclenche l'animation visuelle
+function updateVitalSign(element, value) {
+    if (!element) return;
+    element.textContent = value;
+    element.classList.remove('pulse-update');
+    void element.offsetWidth; // Force le reflow pour relancer l'animation CSS
+    element.classList.add('pulse-update');
+}
+
+// Système de déplacement de caméra (FlyTo) et de visée
 let isFlying = false;
 let targetCamPos = null;
 let targetRing = null;
@@ -238,15 +254,14 @@ function latLonToVector3(lat, lon, radius) {
 }
 
 function flyTo(lat, lon) {
-    const targetDistance = 8.5; // Zoom assez proche pour bien voir l'événement
+    const targetDistance = 8.5; 
     targetCamPos = latLonToVector3(lat, lon, targetDistance);
     
     isFlying = true;
     controls.autoRotate = false;
-    autoRotateCheckbox.checked = false; // Décoche le bouton de rotation auto
+    autoRotateCheckbox.checked = false; 
     showHUD();
 
-    // Création de l'anneau de visée (Targeting Reticle)
     if (targetRing) scene.remove(targetRing);
     const ringGeo = new THREE.RingGeometry(0.3, 0.35, 64);
     const ringMat = new THREE.MeshBasicMaterial({ 
@@ -269,7 +284,6 @@ function addLogEntry(type, text, lat = null, lon = null) {
     const timeStr = new Date().toISOString().substring(11, 19);
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
-    // MODIFICATION ICI : ajout d'un espace et d'un tiret après le span
     entry.innerHTML = `<span class="time">${timeStr}</span> - ${text}`;
     
     if (lat !== null && lon !== null) {
@@ -283,7 +297,6 @@ function addLogEntry(type, text, lat = null, lon = null) {
     }
 }
 
-// Gestion des boutons de thème
 const themeButtons = document.querySelectorAll('#theme-selector button');
 themeButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -335,12 +348,8 @@ document.getElementById('rotation-speed').addEventListener('input', (e) => {
 });
 
 // ==========================================
-// 5b. CAPTURE CINÉMATIQUE
+// 5b. CAPTURE CINÉMATIQUE & LOCALISATION
 // ==========================================
-// La capture se fait DANS la boucle de rendu (juste après composer.render()),
-// jamais depuis le handler de clic directement : sans ça le buffer WebGL peut déjà
-// être vidé par le navigateur au moment où on lit ses pixels (pas de
-// preserveDrawingBuffer ici pour ne pas payer son coût de perf en continu).
 const captureBtn = document.getElementById('capture-btn');
 const shutterFlash = document.getElementById('shutter-flash');
 let captureRequested = false;
@@ -367,8 +376,6 @@ function playShutterSound() {
     osc.stop(audioCtx.currentTime + 0.09);
 }
 
-// Compose le rendu WebGL brut avec un léger habillage (vignette, horloge, watermark)
-// cohérent avec l'esthétique du HUD, puis déclenche le téléchargement du PNG.
 function performCapture() {
     const sourceCanvas = renderer.domElement;
     const outCanvas = document.createElement('canvas');
@@ -378,7 +385,6 @@ function performCapture() {
 
     ctx.drawImage(sourceCanvas, 0, 0, outCanvas.width, outCanvas.height);
 
-    // Vignette additionnelle (au-delà de celle déjà à l'écran) pour un rendu "capture"
     const vignette = ctx.createRadialGradient(
         outCanvas.width / 2, outCanvas.height / 2, outCanvas.height / 3,
         outCanvas.width / 2, outCanvas.height / 2, outCanvas.height / 1.1
@@ -388,7 +394,6 @@ function performCapture() {
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
 
-    // Habillage texte, mis à l'échelle de la résolution de capture (Full HD = référence)
     const scale = outCanvas.width / 1920;
 
     ctx.shadowColor = 'rgba(0, 255, 255, 0.6)';
@@ -425,6 +430,94 @@ function performCapture() {
     }
 }
 
+// --- GÉOLOCALISATION & ÉVÉNEMENT LE PLUS PROCHE ---
+const activeEvents = []; 
+const locateBtn = document.getElementById('locate-btn');
+const distanceBadge = document.getElementById('distance-badge');
+let distanceBadgeTimeout;
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; 
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function showDistanceBadge(text) {
+    if (!distanceBadge) return;
+    distanceBadge.textContent = text;
+    distanceBadge.classList.add('visible');
+    clearTimeout(distanceBadgeTimeout);
+    distanceBadgeTimeout = setTimeout(() => {
+        distanceBadge.classList.remove('visible');
+    }, 5000); 
+}
+
+if (locateBtn) {
+    locateBtn.addEventListener('click', () => {
+        if (!navigator.geolocation) {
+            showDistanceBadge("GÉOLOCALISATION NON SUPPORTÉE");
+            return;
+        }
+
+        showDistanceBadge("RECHERCHE DE POSITION...");
+
+        navigator.geolocation.getCurrentPosition((position) => {
+            const userLat = position.coords.latitude;
+            const userLon = position.coords.longitude;
+
+            if (activeEvents.length === 0) {
+                showDistanceBadge("AUCUN ÉVÉNEMENT CHARGÉ");
+                return;
+            }
+
+            let closestEvent = null;
+            let minDistance = Infinity;
+
+            activeEvents.forEach(event => {
+                const dist = getDistanceFromLatLonInKm(userLat, userLon, event.lat, event.lon);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestEvent = event;
+                }
+            });
+
+            if (closestEvent) {
+                flyTo(closestEvent.lat, closestEvent.lon);
+                
+                const distStr = minDistance < 1 ? `${(minDistance * 1000).toFixed(0)} M` : `${minDistance.toFixed(0)} KM`;
+                showDistanceBadge(`ÉVÉNEMENT LE PLUS PROCHE — ${distStr}`);
+            }
+            // --- NOUVEAU : SUIVI DE L'ISS ---
+const locateIssBtn = document.getElementById('locate-iss-btn');
+if (locateIssBtn) {
+    locateIssBtn.addEventListener('click', () => {
+        const issPos = satelliteViz.getISSPosition();
+        if (issPos) {
+            // On s'assure que le groupe satellites est visible
+            satelliteViz.group.visible = true;
+            const satToggle = document.getElementById('toggle-satellites');
+            if (satToggle) satToggle.checked = true;
+            
+            flyTo(issPos.lat, issPos.lon);
+            showDistanceBadge("SUIVI ISS — STATION SPATIALE INTERNATIONALE");
+        } else {
+            showDistanceBadge("ISS NON ENCORE CHARGÉE...");
+        }
+    });
+}
+        }, (error) => {
+            console.error("Erreur de géolocalisation:", error);
+            showDistanceBadge("GÉOLOCALISATION REFUSÉE");
+        });
+    });
+}
+
 // ==========================================
 // 6. INTÉGRATION DES DONNÉES
 // ==========================================
@@ -442,6 +535,7 @@ async function updateEarthquakes() {
             const isRecent = (Date.now() - eq.time) < 300000; 
             
             earthquakeViz.addEarthquake(eq.lat, eq.lon, eq.mag, eq.id, eq.place, eq.time, isRecent);
+            activeEvents.push({ lat: eq.lat, lon: eq.lon, type: 'eq' });
             
             if (isRecent) {
                 playEarthquakeSound(eq.mag);
@@ -450,15 +544,23 @@ async function updateEarthquakes() {
         }
     });
 
-    // NOUVEAU : Résumé au chargement initial
     if (isInitialEarthquakeLoad) {
-        // On compte les séismes qui se sont produits dans les dernières 2 heures pour le résumé
         recentCount = earthquakes.filter(eq => (Date.now() - eq.time) < 7200000).length;
         if (recentCount > 0) {
             addLogEntry('earthquake', `${recentCount} SÉISMES RÉCENTS (2H)`);
         }
         isInitialEarthquakeLoad = false;
     }
+
+    // --- CALCUL DU POULS (BPM) ---
+    // On compte les séismes significatifs (M >= 2.5) des 2 dernières heures (7200000 ms)
+    const twoHoursAgo = Date.now() - 7200000;
+    const significantRecentEq = earthquakes.filter(eq => eq.time > twoHoursAgo && eq.mag >= 2.5).length;
+    
+    // Formule: Base 40 BPM + 5 BPM par séisme récent significatif. Clamp entre 40 et 140.
+    const bpm = Math.min(140, 40 + (significantRecentEq * 5));
+    currentBPM = bpm;
+    updateVitalSign(valPulse, bpm);
 }
 updateEarthquakes();
 setInterval(updateEarthquakes, 300000);
@@ -477,9 +579,9 @@ async function updateDisasters() {
             disasterViz.addDisaster(d.lat, d.lon, d.alert, d.id, d.name, d.type, d.date, d.source);
             playDisasterSound(d.alert);
             newAlertsCount++;
+            activeEvents.push({ lat: d.lat, lon: d.lon, type: 'dis' });
             
             if (!isInitialDisasterLoad) {
-                // On passe d.lat et d.lon pour le clic
                 addLogEntry('disaster', `ALERTE ${d.alert.toUpperCase()} - ${d.name}`, d.lat, d.lon);
             }
         }
@@ -494,6 +596,17 @@ async function updateDisasters() {
         if (!currentDisasterIds.has(id)) disasterViz.removeDisaster(id);
     });
     previousDisasterIds = currentDisasterIds;
+
+    // --- CALCUL DU SYSTÈME IMMUNITAIRE ---
+    const redAlerts = disasters.filter(d => d.alert.toLowerCase() === 'red').length;
+    const orangeAlerts = disasters.filter(d => d.alert.toLowerCase() === 'orange').length;
+    
+    let immuneStatus = "FAIBLE";
+    if (redAlerts >= 3) immuneStatus = "CRITIQUE";
+    else if (redAlerts > 0 || orangeAlerts >= 5) immuneStatus = "ÉLEVÉE";
+    else if (orangeAlerts > 0) immuneStatus = "MODÉRÉE";
+    
+    updateVitalSign(valImmune, immuneStatus);
 }
 updateDisasters();
 setInterval(updateDisasters, 900000);
@@ -501,16 +614,106 @@ setInterval(updateDisasters, 900000);
 async function updateAirTraffic() {
     const flights = await fetchAirTraffic();
     if (flights.length > 0) airTrafficViz.updateFlights(flights);
+
+    // --- CALCUL DE LA RESPIRATION ---
+    // Formule: Base 8 resp/min + 1 par tranche de 1000 vols. Clamp entre 8 et 25.
+    const resp = Math.min(25, Math.max(8, 8 + Math.floor(flights.length / 1000)));
+    updateVitalSign(valResp, resp);
 }
 updateAirTraffic();
 setInterval(updateAirTraffic, 120000);
 
+// Mise à jour des Satellites + ISS
+let isInitialSatLoad = true;
 async function updateSatellites() {
-    const satellites = await fetchSatellites();
-    if (satellites.length > 0) satelliteViz.updateSatellites(satellites);
+    const satData = await fetchSatellites();
+    if (satData.satellites && satData.satellites.length > 0) {
+        satelliteViz.updateSatellites(satData.satellites);
+        
+        // --- CALCUL DU SYSTÈME NERVEUX ---
+        updateVitalSign(valNervous, satData.satellites.length);
+    }
+    if (satData.iss) {
+        satelliteViz.updateISS(satData.iss);
+        if (isInitialSatLoad) {
+            addLogEntry('sat', `STATION SPATIALE INTERNATIONALE (ISS) DÉTECTÉE`);
+            isInitialSatLoad = false;
+        }
+    }
 }
 updateSatellites();
 setInterval(updateSatellites, 60000);
+
+// ==========================================
+// 6b. EASTER EGG : L'OVNI
+// ==========================================
+let ufo = null;
+let ufoTrail = null;
+let ufoStartTime = 0;
+let nextUfoTime = clock.getElapsedTime() + (120 + Math.random() * 120);
+
+function spawnUFO() {
+    const ufoGeo = new THREE.SphereGeometry(0.2, 16, 16);
+    const ufoMat = new THREE.MeshBasicMaterial({ 
+        color: 0xFF0000, 
+        transparent: true, 
+        opacity: 1,
+        blending: THREE.AdditiveBlending
+    });
+    ufo = new THREE.Mesh(ufoGeo, ufoMat);
+    
+    const startSide = Math.random() > 0.5 ? 1 : -1;
+    const startY = (Math.random() - 0.5) * 20;
+    const startZ = (Math.random() - 0.5) * 20;
+    ufo.position.set(startSide * 30, startY, startZ);
+    
+    ufo.userData.direction = new THREE.Vector3(-startSide, 0, 0).normalize();
+    ufo.userData.type = 'ufo';
+    
+    scene.add(ufo);
+    
+    const trailGeo = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(30 * 3); 
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    const trailMat = new THREE.LineBasicMaterial({ 
+        color: 0xFF0000, 
+        transparent: true, 
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending
+    });
+    ufoTrail = new THREE.Line(trailGeo, trailMat);
+    scene.add(ufoTrail);
+    
+    ufoStartTime = clock.getElapsedTime();
+}
+
+function updateUFO(delta) {
+    if (!ufo) return;
+    
+    const speed = 40;
+    ufo.position.add(ufo.userData.direction.clone().multiplyScalar(speed * delta));
+    
+    const positions = ufoTrail.geometry.attributes.position.array;
+    for (let i = positions.length - 3; i >= 3; i--) {
+        positions[i] = positions[i - 3];
+    }
+    positions[0] = ufo.position.x;
+    positions[1] = ufo.position.y;
+    positions[2] = ufo.position.z;
+    ufoTrail.geometry.attributes.position.needsUpdate = true;
+    
+    if (Math.abs(ufo.position.x) > 35) {
+        scene.remove(ufo);
+        scene.remove(ufoTrail);
+        ufo.geometry.dispose();
+        ufo.material.dispose();
+        ufoTrail.geometry.dispose();
+        ufoTrail.material.dispose();
+        ufo = null;
+        ufoTrail = null;
+        nextUfoTime = clock.getElapsedTime() + (120 + Math.random() * 120); 
+    }
+}
 
 // ==========================================
 // 7. RAYCASTING (TOOLTIP)
@@ -553,6 +756,16 @@ function checkIntersections() {
         const satHits = raycaster.intersectObject(satelliteViz.pointsMesh);
         satHits.forEach(h => intersects.push({ ...h, category: 'sat' }));
     }
+
+        // L'ISS est raycastable si le groupe est visible OU si l'ISS existe indépendamment
+    if (satelliteViz.issMesh && satelliteViz.issMesh.visible) {
+        const issHits = raycaster.intersectObject(satelliteViz.issMesh);
+        issHits.forEach(h => intersects.push({ ...h, category: 'iss' }));
+    }
+    if (ufo) {
+        const ufoHits = raycaster.intersectObject(ufo);
+        ufoHits.forEach(h => intersects.push({ ...h, category: 'ufo' }));
+    }
     
     intersects.sort((a, b) => a.distance - b.distance);
     if (intersects.length > 0) {
@@ -593,6 +806,16 @@ function checkIntersections() {
                         <div>Vitesse: ${sat.velocity} km/h</div>
                         <div>Lat: ${sat.lat.toFixed(2)}° | Lon: ${sat.lon.toFixed(2)}°</div>`;
             }
+        } else if (hit.category === 'iss') {
+            html = `<strong>Station Spatiale Internationale</strong>
+                    <div>Nom: <b>ISS (ZARYA)</b></div>
+                    <div>Altitude: ${data.alt.toFixed(0)} km</div>
+                    <div>Vitesse: ${data.velocity} km/h</div>
+                    <div>Lat: ${data.lat.toFixed(2)}° | Lon: ${data.lon.toFixed(2)}°</div>`;
+        } else if (hit.category === 'ufo') {
+            html = `<strong>??? NON IDENTIFIÉ ???</strong>
+                    <div>Je veux croire...</div>
+                    <div style="margin-top:5px; font-size:10px; opacity:0.6;">X-Files Easter Egg</div>`;
         }
         if (html) { tooltip.innerHTML = html; tooltip.style.display = 'block'; }
     } else {
@@ -607,6 +830,7 @@ function checkIntersections() {
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
+    const elapsed = clock.getElapsedTime();
     
     controls.update();
     globe.update(); 
@@ -617,7 +841,30 @@ function animate() {
     satelliteViz.update();
     checkIntersections();
 
-    // Gestion de l'intro cinématique (arrivée caméra depuis l'espace)
+    // --- ANIMATION ECG (Électrocardiogramme) ---
+    // Le timer s'incrémente plus ou moins vite selon le BPM réel
+    heartbeatTimer += delta * (currentBPM / 60);
+    if (heartbeatTimer >= 1.0) heartbeatTimer = 0;
+
+    let y = 12; // Ligne plat
+    // Si on est dans le pic du battement (10% du cycle), on monte puis on descend
+    if (heartbeatTimer < 0.05) y = 2; 
+    else if (heartbeatTimer < 0.1) y = 22; 
+
+    ecgPoints.shift();
+    ecgPoints.push(y);
+
+    ecgCtx.clearRect(0, 0, 120, 24);
+    ecgCtx.strokeStyle = '#00FFFF';
+    ecgCtx.lineWidth = 1.5;
+    ecgCtx.beginPath();
+    ecgCtx.moveTo(0, ecgPoints[0]);
+    for (let i = 1; i < ecgPoints.length; i++) {
+        ecgCtx.lineTo(i, ecgPoints[i]);
+    }
+    ecgCtx.stroke();
+
+    // Gestion de l'intro cinématique
     if (introActive) {
         introElapsed += delta;
         const t = Math.min(introElapsed / INTRO_DURATION, 1);
@@ -631,7 +878,7 @@ function animate() {
         }
     }
 
-    // Gestion du déplacement fluide de la caméra (FlyTo)
+    // Gestion du déplacement fluide de la caméra
     if (isFlying && targetCamPos) {
         camera.position.lerp(targetCamPos, 0.05);
         if (camera.position.distanceTo(targetCamPos) < 0.1) {
@@ -641,19 +888,29 @@ function animate() {
 
     // Gestion de l'anneau de visée temporaire
     if (targetRing) {
-        const elapsed = clock.getElapsedTime() - targetRingStartTime;
-        const duration = 3.0; // L'anneau dure 3 secondes
+        const elapsedRing = elapsed - targetRingStartTime;
+        const duration = 3.0; 
         
-        if (elapsed > duration) {
+        if (elapsedRing > duration) {
             scene.remove(targetRing);
             targetRing.geometry.dispose();
             targetRing.material.dispose();
             targetRing = null;
         } else {
-            const progress = elapsed / duration;
-            const scale = 1 + (progress * 4); // Il s'agrandit
+            const progress = elapsedRing / duration;
+            const scale = 1 + (progress * 4); 
             targetRing.scale.set(scale, scale, scale);
-            targetRing.material.opacity = 1 - progress; // Il s'estompe
+            targetRing.material.opacity = 1 - progress; 
+        }
+    }
+
+    // Gestion de l'OVNI
+    if (!introActive) {
+        if (!ufo && elapsed > nextUfoTime) {
+            spawnUFO();
+        }
+        if (ufo) {
+            updateUFO(delta);
         }
     }
     

@@ -105,6 +105,81 @@ body, html {
     color: var(--accent-color);
 }
 
+/* --- MONITEUR DE SIGNES VITAUX --- */
+#vital-monitor {
+    top: 60px; /* Placé juste sous le theme-selector */
+    right: 20px;
+    width: 220px;
+    background: rgba(10, 10, 10, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 2px solid var(--accent-color);
+    backdrop-filter: blur(4px);
+    padding: 10px;
+    font-size: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.vital-header {
+    color: var(--accent-color);
+    font-weight: bold;
+    font-size: 11px;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    text-align: center;
+}
+
+.vital-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+}
+
+.vital-label {
+    color: var(--hud-color);
+    opacity: 0.8;
+    flex: 1;
+}
+
+.vital-value {
+    color: #fff;
+    font-weight: bold;
+    text-align: right;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.unit {
+    font-size: 10px;
+    color: var(--hud-color);
+    opacity: 0.6;
+    font-weight: normal;
+}
+
+#ecg-canvas {
+    margin-left: 10px;
+    background: rgba(0, 255, 255, 0.05);
+    border: 1px solid rgba(0, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+/* Animation de pulsation lors d'une mise à jour de valeur */
+@keyframes pulseGlow {
+    0% { text-shadow: 0 0 2px rgba(255,255,255,0.5); color: #fff; }
+    50% { text-shadow: 0 0 10px var(--accent-color); color: var(--accent-color); }
+    100% { text-shadow: 0 0 2px rgba(255,255,255,0.5); color: #fff; }
+}
+
+.pulse-update {
+    animation: pulseGlow 0.6s ease-out;
+}
+
 #legend {
     bottom: 20px;
     right: 20px;
@@ -122,7 +197,9 @@ body, html {
 }
 .pulse-dot { background-color: #FFFFFF; }
 .disaster-dot { background-color: #FF4500; }
-.traffic-dot { background-color: #FF8C00; }
+.traffic-dot { background-color: #FF00FF; } /* Magenta pour les avions */
+.sat-dot { background-color: #00FF00; } /* Vert pour les Starlink */
+.iss-dot { background-color: #FFAA33; } /* Orange pour l'ISS */
 
 /* --- EVENT LOG FEED (Terminal) --- */
 #event-log {
@@ -216,10 +293,15 @@ body, html {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- CAPTURE CINÉMATIQUE --- */
-#capture-btn {
+/* --- BOUTONS D'ACTION (CAPTURE + LOCALISATION) --- */
+#action-buttons {
     bottom: 20px;
     left: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+#action-buttons button {
     width: 40px;
     height: 40px;
     background: rgba(10, 10, 10, 0.7);
@@ -235,17 +317,44 @@ body, html {
     color: var(--hud-color);
 }
 
-#capture-btn:hover {
+#action-buttons button:hover {
     border-color: var(--accent-color);
     color: var(--accent-color);
     box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
 }
 
-#capture-btn svg {
+#action-buttons button svg {
     width: 18px;
     height: 18px;
 }
 
+/* --- BADGE DE DISTANCE (Événement le plus proche) --- */
+#distance-badge {
+    bottom: 140px; /* Au-dessus du panneau de paramètres */
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: rgba(10, 10, 10, 0.9);
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    opacity: 0;
+    transition: opacity 0.5s, transform 0.5s;
+    pointer-events: none;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+}
+
+#distance-badge.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* --- CAPTURE CINÉMATIQUE --- */
 /* Flash blanc bref au moment du clic, façon obturateur d'appareil photo */
 #shutter-flash {
     position: fixed;
@@ -311,13 +420,15 @@ body, html {
     gap: 12px;
     backdrop-filter: blur(6px);
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    max-width: 90vw; /* Empêche de sortir de l'écran sur les petites fenêtres */
 }
 
 .settings-row {
     display: flex;
-    gap: 25px;
+    gap: 15px; /* Réduit de 25px à 15px pour fit les 4 toggles */
     align-items: center;
     justify-content: center;
+    flex-wrap: wrap; /* Permet de passer à la ligne si besoin */
 }
 
 .settings-divider {
@@ -337,6 +448,7 @@ body, html {
     opacity: 0.8;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap; /* Empêche les mots de se casser en deux */
 }
 
 .slider-group {

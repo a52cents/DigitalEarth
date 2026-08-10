@@ -8,13 +8,15 @@ export async function fetchSatellites() {
         if (!response.ok) throw new Error('Erreur réseau Satellites');
         const data = await response.json();
         
-        // La fonction serverless renvoie directement le tableau propre
-        const satellites = data.satellites || [];
+        // On renvoie l'objet complet contenant { satellites: [...], iss: {...} }
+        if (!data.satellites) data.satellites = [];
+        if (!data.iss) data.iss = null;
 
-        console.log(`%c[CESTRAK] ${satellites.length} satellites Starlink récupérés.`, 'color: #FFD700');
-        return satellites;
+        console.log(`%c[CESTRAK] ${data.satellites.length} satellites Starlink récupérés.`, 'color: #FFD700');
+        return data;
     } catch (error) {
         console.error('[CESTRAK] Erreur de fetch:', error);
-        return [];
+        // En cas d'erreur, on renvoie bien la structure attendue par main.js
+        return { satellites: [], iss: null };
     }
 }

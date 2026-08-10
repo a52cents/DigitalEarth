@@ -37,11 +37,35 @@
             <button data-theme="wire">Wire</button>
         </div>
 
+        <!-- NOUVEAU : Moniteur de Signes Vitaux -->
+        <div id="vital-monitor" class="hud-element">
+            <div class="vital-header">VITAL SIGNS MONITOR</div>
+            <div class="vital-row">
+                <div class="vital-label">POULS</div>
+                <div class="vital-value"><span id="val-pulse">--</span> <span class="unit">BPM</span></div>
+                <canvas id="ecg-canvas" width="120" height="24"></canvas>
+            </div>
+            <div class="vital-row">
+                <div class="vital-label">RESPIRATION</div>
+                <div class="vital-value"><span id="val-resp">--</span> <span class="unit">/min</span></div>
+            </div>
+            <div class="vital-row">
+                <div class="vital-label">IMMUNITÉ</div>
+                <div class="vital-value"><span id="val-immune">--</span></div>
+            </div>
+            <div class="vital-row">
+                <div class="vital-label">SYST. NERVEUX</div>
+                <div class="vital-value"><span id="val-nervous">--</span> <span class="unit">actifs</span></div>
+            </div>
+        </div>
+
         <!-- legend -->
         <div id="legend" class="hud-element">
-            <div><span class="dot pulse-dot"></span> Séismes (USGS)</div>
-            <div><span class="dot disaster-dot"></span> Alertes (ONU/GDACS)</div>
-            <div><span class="dot traffic-dot"></span> Trafic aérien (OpenSky)</div>
+            <div><span class="dot pulse-dot"></span> Pouls · Séismes (USGS)</div>
+            <div><span class="dot disaster-dot"></span> Système immunitaire · Alertes (ONU/GDACS)</div>
+            <div><span class="dot traffic-dot"></span> Respiration · Trafic aérien (OpenSky)</div>
+            <div><span class="dot sat-dot"></span> Système nerveux · Satellites (Starlink)</div>
+            <div><span class="dot iss-dot"></span> Station Spatiale (ISS)</div>
         </div>
 
         <!-- Panneau de Paramètres -->
@@ -52,7 +76,7 @@
                         <input type="checkbox" id="toggle-earthquakes" checked>
                         <span class="slider"></span>
                     </label>
-                    <span class="toggle-text">Séismes</span>
+                    <span class="toggle-text">Pouls · Séismes</span>
                 </div>
 
                 <div class="toggle-group">
@@ -60,7 +84,7 @@
                         <input type="checkbox" id="toggle-disasters" checked>
                         <span class="slider"></span>
                     </label>
-                    <span class="toggle-text">Alertes</span>
+                    <span class="toggle-text">Immun. · Alertes</span>
                 </div>
 
                 <div class="toggle-group">
@@ -68,7 +92,15 @@
                         <input type="checkbox" id="toggle-airtraffic" checked>
                         <span class="slider"></span>
                     </label>
-                    <span class="toggle-text">Avions</span>
+                    <span class="toggle-text">Respiration · Avions</span>
+                </div>
+
+                <div class="toggle-group">
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-satellites" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-text">Système nerveux · Satellites</span>
                 </div>
             </div>
 
@@ -89,13 +121,31 @@
                 </div>
             </div>
         </div>
-        <!-- NOUVEAU : Bouton de capture cinématique -->
-        <button id="capture-btn" class="hud-element" title="Capturer la vue actuelle">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 8h2.5L8 5.5h8L17.5 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
-                <circle cx="12" cy="13" r="3.5" />
-            </svg>
-        </button>
+        
+        <!-- NOUVEAU : Badge de distance pour l'événement le plus proche -->
+        <div id="distance-badge" class="hud-element"></div>
+
+        <!-- NOUVEAU : Boutons d'action (Localisation + ISS + Capture) -->
+        <div id="action-buttons" class="hud-element">
+            <button id="locate-btn" title="Trouver l'événement le plus proche de chez vous">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+                </svg>
+            </button>
+            <button id="locate-iss-btn" title="Suivre la Station Spatiale (ISS)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L8 6v4l-4 4v6h6v-4l4-4h4l4-4V2H12z" />
+                    <circle cx="14" cy="6" r="1" />
+                </svg>
+            </button>
+            <button id="capture-btn" title="Capturer la vue actuelle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 8h2.5L8 5.5h8L17.5 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+                    <circle cx="12" cy="13" r="3.5" />
+                </svg>
+            </button>
+        </div>
     </div>
 
     <div id="tooltip"></div>
